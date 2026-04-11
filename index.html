@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>给梨加速器 — 广告任务查看器</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+#header, #token-bar, #task-steps-bar, #webview-toolbar, .frame-toolbar { -webkit-user-select: none; user-select: none; }
+
+:root {
+  --bg: #0b1220;
+  --panel: #0f1b2d;
+  --panel2: #101f36;
+  --border: rgba(255,255,255,0.10);
+  --text: rgba(255,255,255,0.92);
+  --muted: rgba(255,255,255,0.62);
+  --muted2: rgba(255,255,255,0.45);
+  --accent: #4f8cff;
+  --accent2: #ff6b8b;
+  --ok: #35c46a;
+  --warn: #ffb020;
+}
+
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Microsoft YaHei', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: radial-gradient(1200px 600px at 10% 0%, rgba(79,140,255,0.18), transparent 60%),
+              radial-gradient(900px 500px at 80% 10%, rgba(255,107,139,0.14), transparent 55%),
+              var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+#header {
+  background: linear-gradient(180deg, rgba(15,27,45,0.95), rgba(15,27,45,0.75));
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--text);
+}
+#status { font-size: 12px; color: var(--muted2); }
+
+#token-bar {
+  background: rgba(15,27,45,0.65);
+  backdrop-filter: blur(10px);
+  padding: 10px 18px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#token-bar input {
+  flex: 1;
+  background: rgba(16,31,54,0.85);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  outline: none;
+}
+#token-bar input:focus {
+  border-color: rgba(79,140,255,0.65);
+  box-shadow: 0 0 0 3px rgba(79,140,255,0.18);
+}
+#token-bar button {
+  background: linear-gradient(180deg, rgba(79,140,255,0.95), rgba(79,140,255,0.75));
+  border: 1px solid rgba(79,140,255,0.35);
+  color: #fff;
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+#token-bar button:nth-of-type(2) {
+  background: linear-gradient(180deg, rgba(255,107,139,0.95), rgba(255,107,139,0.75));
+  border-color: rgba(255,107,139,0.35);
+}
+#token-bar button:nth-of-type(3) {
+  background: rgba(16,31,54,0.85);
+  border: 1px solid var(--border);
+}
+
+#task-steps-bar {
+  background: rgba(15,27,45,0.55);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 18px;
+  flex-shrink: 0;
+}
+#task-steps {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  min-height: 48px;
+}
+.task-step {
+  width: 88px;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(16,31,54,0.65);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 7px 10px;
+}
+.task-step .reward {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: var(--text);
+  line-height: 16px;
+}
+.task-step .meta {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted2);
+  line-height: 12px;
+}
+.task-step.done {
+  background: rgba(53,196,106,0.14);
+  border-color: rgba(53,196,106,0.35);
+}
+.task-step.done .meta { color: rgba(53,196,106,0.85); }
+.task-step.cur {
+  border-color: rgba(255,176,32,0.70);
+  box-shadow: 0 0 0 3px rgba(255,176,32,0.16);
+}
+
+#content { display: flex; flex: 1 1 0%; min-height: 0; min-width: 0; overflow: hidden; }
+#webview-wrap { flex: 1 1 0%; display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; position: relative; }
+#webview-toolbar {
+  padding: 10px 12px;
+  background: rgba(15,27,45,0.65);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted2);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+#webview-toolbar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.right-split { flex: 1 1 0%; min-height: 0; display: flex; flex-direction: row; overflow: hidden; }
+.split-pane { flex: 1 1 0%; min-width: 0; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.split-pane + .split-pane { border-left: 1px solid var(--border); border-top: none; }
+#ad-pane { flex: 1 1 0%; min-width: 0; }
+#landing-pane { flex: 1 1 0%; min-width: 0; }
+#ad-container { flex: 1 1 0%; min-height: 0; width: 100%; height: 100%; display: flex; flex-direction: column; }
+.frame {
+  flex: 1 1 0%;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  margin: 8px;
+  overflow: hidden;
+  background: rgba(16,31,54,0.65);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: calc(100% - 16px);
+}
+.frame-toolbar {
+  padding: 8px 10px;
+  background: rgba(15,27,45,0.65);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.frame-toolbar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frame-body { flex: 1 1 0%; min-height: 0; display: flex; flex-direction: column; }
+.frame-placeholder { padding: 14px; color: #7d7d7d; font-size: 12px; }
+#msg { padding: 20px; color: #666; font-size: 13px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>给梨加速器 · 广告任务查看器</h1>
+  <div style="display: flex; gap: 15px; align-items: center;">
+    <span id="wallet-status" style="font-size: 13px; color: #ff9800; font-weight: bold;"></span>
+    <span id="status">正在初始化...</span>
+  </div>
+</div>
+<div id="token-bar">
+  <input id="token-input" type="text" placeholder="粘贴 access_token 后点击确认" />
+  <button onclick="setToken()">确认</button>
+  <button onclick="loadAccountFile()">加载账号文件</button>
+  <button onclick="loadWallet(); loadTasks()">刷新任务</button>
+  <label style="color: #4CAF50; margin-left: 10px; cursor: pointer; user-select: none;">
+    <input type="checkbox" id="auto-ad-checkbox" onchange="toggleAutoAd()" /> 自动挂机看广告(模拟鼠标)
+  </label>
+</div>
+<div id="task-steps-bar">
+  <div id="task-steps"></div>
+</div>
+<div id="content">
+  <div id="webview-wrap">
+    <div id="webview-toolbar">
+      <span id="ad-url-label">未加载广告</span>
+    </div>
+    <div class="right-split">
+      <!-- 左侧：广告区域（占宽度 1/2，高度撑满） -->
+      <div class="split-pane" id="ad-pane">
+        <!-- 这里不再写死 <webview>，而是由 JS 动态创建，保证所有安全属性和路径在第一时间绑定成功 -->
+        <div style="flex:1; min-height:0; display:flex;" id="ad-container"></div>
+      </div>
+
+      <!-- 右侧：点击广告打开的网页（frame） -->
+      <div class="split-pane" id="landing-pane">
+        <div class="frame">
+          <div class="frame-toolbar">
+            <span id="landing-url-label">点击广告打开的网页将显示在这里</span>
+          </div>
+          <div class="frame-body" id="landing-container">
+            <div class="frame-placeholder">暂无内容</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { ipcRenderer } = require('electron');
+const path = require('path');
+
+let currentToken = null;
+let adDefaultUrl = 'https://mercuryh5.ixiaochuan.cn/gsAccelerator?adnum=10&app=geili&retry=1';
+let tasks = [];
+
+let currentTaskId = null;
+let currentTaskIndex = -1;
+
+let adWebview = null;
+let coin2DurationRate = 80;
+
+let adWebviewDidFinishLoad = false;
+let adHandshakeAcked = false;
+let lastRefreshAdListAt = 0;
+let lastRefreshAdListTaskId = null;
+
+let landingWebview = null;
+
+function ensureLandingWebview() {
+  if (landingWebview && !landingWebview.isDestroyed?.()) return landingWebview;
+
+  const container = document.getElementById('landing-container');
+  container.innerHTML = '';
+
+  const wv = document.createElement('webview');
+  wv.id = 'landingview';
+  wv.setAttribute('tabindex', '0');
+  wv.style.width = '100%';
+  wv.style.height = '100%';
+  wv.style.border = 'none';
+  wv.style.display = 'block';
+  wv.style.flex = '1';
+  // Landing 页不需要 Node 能力，保持更接近普通浏览器。
+  wv.setAttribute('webpreferences', 'nodeIntegration=false,contextIsolation=true');
+  container.appendChild(wv);
+  landingWebview = wv;
+
+  // 修复 Electron 早期版本 webview 内部 iframe 高度无法撑满的 bug
+  requestAnimationFrame(() => {
+    try {
+      const iframe = wv.shadowRoot?.querySelector('iframe');
+      if (iframe) iframe.style.height = '100%';
+    } catch {}
+  });
+
+  return wv;
+}
+
+function openLandingPage(url) {
+  if (!url || typeof url !== 'string') return;
+  document.getElementById('landing-url-label').textContent = url;
+  const wv = ensureLandingWebview();
+  try { wv.src = url; } catch (e) { console.warn('[ad-viewer] openLandingPage failed:', e.message); }
+}
+
+let _refreshTasksTimer = null;
+
+let autoModeInfo = false;
+let previousTaskStatuses = {};
+
+async function init() {
+  const info = await ipcRenderer.invoke('ad:init');
+  currentToken = info.token;
+  adDefaultUrl = info.adDefaultUrl || adDefaultUrl;
+  autoModeInfo = !!info.autoMode;
+  
+  if (autoModeInfo && info.timeout) {
+    let ms = 0;
+    const match = info.timeout.match(/(?:(\d+)m)?(?:(\d+)s)?/);
+    if (match) {
+      if (match[1]) ms += parseInt(match[1]) * 60000;
+      if (match[2]) ms += parseInt(match[2]) * 1000;
+    }
+    if (ms > 0) {
+      setTimeout(() => {
+        ipcRenderer.send('ad:exit', 'error:timeout');
+      }, ms);
+    }
+  }
+
+  if (currentToken) {
+    document.getElementById('token-input').value = currentToken;
+    document.getElementById('status').textContent = `已设置 Token`;
+    loadWallet();
+    loadTasks();
+  } else {
+    document.getElementById('status').textContent = '未设置 Token';
+  }
+}
+
+async function loadWallet() {
+  if (!currentToken) return;
+  const resp = await ipcRenderer.invoke('ad:getWallet');
+  if (resp && !resp.error && resp.data && resp.data.data) {
+    const totalSecs = resp.data.data.remain_acc_second || 0;
+    const hours = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    document.getElementById('wallet-status').textContent = `总加速时长：${hours}时${mins}分`;
+  }
+}
+
+function setToken() {
+  const val = document.getElementById('token-input').value.trim();
+  if (!val) return alert('请输入 access_token');
+  currentToken = val;
+  ipcRenderer.send('ad:setToken', val);
+  document.getElementById('status').textContent = '已更新 Token';
+  loadWallet();
+  loadTasks();
+}
+
+async function loadAccountFile() {
+  document.getElementById('status').textContent = '正在选择账号文件...';
+  const result = await ipcRenderer.invoke('ad:openAccountFile');
+  if (result.error) {
+    if (result.error !== 'Cancelled') {
+      console.error('[ad-viewer] loadAccountFile error:', result.error);
+      document.getElementById('status').textContent = 'Failed to load account file';
+    } else {
+      document.getElementById('status').textContent = currentToken ? '已设置 Token' : '未设置 Token';
+    }
+    return;
+  }
+  currentToken = result.token;
+  ipcRenderer.send('ad:setToken', result.token);
+  document.getElementById('token-input').value = result.token;
+  document.getElementById('status').textContent = '已从账号文件加载 Token';
+  loadWallet();
+  loadTasks();
+}
+
+async function loadTasks(options = {}) {
+  const { autoLoadAd = true, showLoading = true } = options;
+
+  if (!currentToken) return alert('请先设置 Token');
+  const resp = await ipcRenderer.invoke('ad:getConfig');
+  if (resp.error) {
+    console.error('[ad-viewer] loadTasks error:', resp.error);
+    return;
+  }
+  const data = resp.data;
+  if (!data || data.code !== 0 || !data.data) {
+    console.error('[ad-viewer] API error :', data);
+    return;
+  }
+
+  // 对齐原版：积分/金币 -> 分钟 的换算比例默认 80，可被服务端配置覆盖
+  // original: DEFAULT_COIN_2_DURATION_RATE = 80
+  try {
+    const rate = Number(data?.data?.coin_2_duration_rate);
+    if (Number.isFinite(rate) && rate > 0) coin2DurationRate = rate;
+  } catch {
+    // ignore
+  }
+  
+  // 语义对齐原版：左侧只展示主任务 task_list；task_detail_list 属于“领取条件/进度说明”，不应展开成左侧节点。
+  tasks = Array.isArray(data.data.task_list) ? data.data.task_list : [];
+
+  if (autoModeInfo) {
+    tasks.forEach(t => {
+      const prevStatus = previousTaskStatuses[t.task_id];
+      if (prevStatus !== 2 && t.complete_status === 2) {
+        ipcRenderer.send('ad:log', `已完成${t.task_name}`);
+      }
+      previousTaskStatuses[t.task_id] = t.complete_status;
+    });
+  }
+
+  renderTaskSteps();
+  document.getElementById('status').textContent = tasks.length ? `共 ${tasks.length} 个任务` : '暂无任务';
+
+  if (!tasks.length) {
+    currentTaskId = null;
+    currentTaskIndex = -1;
+    return;
+  }
+
+  if (autoModeInfo && tasks.every(t => t.complete_status === 2)) {
+    ipcRenderer.send('ad:exit', 'success:tasks complete');
+    return;
+  }
+
+  const idxById = currentTaskId == null
+    ? -1
+    : tasks.findIndex((t, i) => String(t?.task_id ?? i) === String(currentTaskId));
+
+  const initialIdx = idxById >= 0
+    ? idxById
+    : tasks.findIndex((t) => t.complete_status !== 2);
+
+  if (autoLoadAd && initialIdx >= 0) {
+    selectTask(initialIdx, { forceReload: adWebview == null });
+  }
+
+  // 若当前任务已完成，则自动推进到下一个未完成任务
+  maybeAutoAdvanceToNextTask();
+}
+
+ipcRenderer.on('ad:taskChanged', () => {
+  // 后台刷新任务状态：不重载 webview，避免重复请求导致 rate limit。
+  if (_refreshTasksTimer) return;
+  _refreshTasksTimer = setTimeout(() => {
+    _refreshTasksTimer = null;
+    loadTasks({ autoLoadAd: false, showLoading: false });
+  }, 200);
+});
+
+function loadAd(idx) {
+  selectTask(idx, { forceReload: false });
+}
+
+function computeAdUrl() {
+  const heightPx = 1080;
+
+  let adUrl = adDefaultUrl;
+  try {
+    const u = new URL(adDefaultUrl);
+    u.searchParams.set('height', String(heightPx));
+    u.searchParams.set('style', 'new');
+    adUrl = u.toString();
+  } catch {
+    const joiner = adDefaultUrl.includes('?') ? '&' : '?';
+    adUrl = `${adDefaultUrl}${joiner}height=${heightPx}&style=new`;
+  }
+  return adUrl;
+}
+
+function renderTaskSteps() {
+  const wrap = document.getElementById('task-steps');
+  if (!wrap) return;
+  if (!tasks.length) {
+    wrap.innerHTML = '<div id="msg">请先设置 Token 并刷新任务</div>';
+    return;
+  }
+
+  const coinsToMinutes = (coins) => {
+    const n = Number(coins);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    const rate = Number(coin2DurationRate) || 80;
+    return Math.floor(n / rate);
+  };
+
+  const formatRewardMinutes = (t) => {
+    // 优先解析 reward_count_desc
+    const raw = String(t?.reward_count_desc ?? '').trim();
+    if (raw) {
+      // 若已经是分钟文案（例如“20分钟”），直接返回（抽取数值 + 单位标准化）
+      if (/分钟/.test(raw)) {
+        const m = /([0-9]+(?:\.[0-9]+)?)/.exec(raw);
+        return `${m ? m[1] : raw.replace(/分钟/g, '').trim()}分钟`;
+      }
+      // 纯数字：在我们的接口里通常是积分/金币，需换算分钟
+      if (/^\d+(?:\.\d+)?$/.test(raw)) {
+        return `${coinsToMinutes(raw)}分钟`;
+      }
+    }
+
+    // fallback：reward_count 通常是积分/金币
+    const coins = t?.reward_count;
+    const minutes = coinsToMinutes(coins);
+    return `${minutes}分钟`;
+  };
+
+  const html = tasks.map((t, i) => {
+    const done = t?.complete_status === 2;
+    const cur = i === currentTaskIndex;
+    const rewardText = formatRewardMinutes(t);
+    const reward = rewardText ? `+${rewardText}` : '+0分钟';
+    const meta = done ? '已完成' : '未完成';
+    const title = `${t?.task_name || ''} 奖励 ${rewardText || '0分钟'} ${done ? '已完成' : '未完成'}`.trim();
+    return `
+      <div class="task-step ${done ? 'done' : ''} ${cur ? 'cur' : ''}" title="${title.replace(/"/g, '&quot;')}">
+        <div class="reward">${reward}</div>
+        <div class="meta">${meta}</div>
+      </div>`;
+  }).join('');
+  wrap.innerHTML = html;
+}
+
+function ensureAdWebview() {
+  if (adWebview && !adWebview.isDestroyed?.()) return adWebview;
+
+  const container = document.getElementById('ad-container');
+  container.onmousedown = null;
+  container.innerHTML = '';
+
+  // 生成标准的 Windows 兼容三斜杠 file:/// 绝对路径
+  const scriptPath = path.resolve(__dirname, 'webview-preload.js').replace(/\\/g, '/');
+  const preloadPath = `file:///${scriptPath}`;
+
+  const wv = document.createElement('webview');
+  wv.id = 'adview';
+  wv.setAttribute('tabindex', '0');
+  wv.style.width = '100%';
+  wv.style.height = '100%';
+  wv.style.border = 'none';
+  wv.style.flex = '1';
+  wv.style.display = 'block';
+
+  wv.setAttribute('allowpopups', '');
+  wv.setAttribute('disablewebsecurity', '');
+  wv.setAttribute('useragent', 'glacc/1.0.0.100 Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.5359.215 Electron/22.3.27 Safari/537.36');
+  wv.setAttribute('webpreferences', 'nodeIntegration=true,contextIsolation=false');
+  wv.setAttribute('preload', preloadPath);
+
+  // 重建 webview 时重置握手/加载状态
+  adWebviewDidFinishLoad = false;
+  adHandshakeAcked = false;
+
+  const sendAdHandshake = (reason) => {
+    if (adHandshakeAcked) return;
+    try {
+      wv.send('embeded-webview-dom-ready', 1, true, 0);
+      console.log(`[ad-viewer] handshake sent(${reason}) ok`);
+    } catch (e) {
+      console.warn(`[ad-viewer] handshake sent(${reason}) failed: ${e?.message || e}`);
+    }
+  };
+
+  container.onmousedown = () => {
+    try { wv.focus(); } catch {}
+  };
+
+  wv.addEventListener('dom-ready', () => {
+    sendAdHandshake('dom-ready');
+    try { wv.focus(); } catch {}
+  });
+
+  wv.addEventListener('did-finish-load', () => {
+    adWebviewDidFinishLoad = true;
+    if (!adHandshakeAcked) sendAdHandshake('did-finish-load');
+  });
+
+  wv.addEventListener('did-fail-load', (e) => {
+    console.error('WebView加载错误:', e.errorCode, e.errorDescription, e.validatedURL);
+  });
+
+  wv.addEventListener('console-message', (e) => {
+    console.log(`[广告页内部日志] ${e.message}`);
+  });
+
+  wv.addEventListener('ipc-message', (e) => {
+    try {
+      if (e.channel === 'ad:handshakeAck') {
+        adHandshakeAcked = true;
+        return;
+      }
+      if (e.channel === 'ad:openLanding' && e.args && e.args[0]) {
+        openLandingPage(String(e.args[0]));
+      }
+    } catch {}
+  });
+
+  wv.addEventListener('new-window', (e) => {
+    try {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (e.url) openLandingPage(String(e.url));
+    } catch {}
+  });
+
+  container.appendChild(wv);
+  adWebview = wv;
+  
+  // 关键：修复 Electron 早期版本 webview 内部 iframe 高度无法撑满的 bug
+  requestAnimationFrame(() => {
+    try {
+      const iframe = wv.shadowRoot?.querySelector('iframe');
+      if (iframe) iframe.style.height = '100%';
+    } catch {}
+  });
+
+  return adWebview;
+}
+
+function selectTask(idx, { forceReload = false } = {}) {
+  const t = tasks[idx];
+  if (!t) return;
+
+  if (autoModeInfo && currentTaskIndex !== idx) {
+    ipcRenderer.send('ad:log', `正在完成${t.task_name}`);
+  }
+
+  _lastAdClickTime = 0; // 切换任务时重置点击时间
+
+  currentTaskIndex = idx;
+  currentTaskId = t.task_id || idx;
+  ipcRenderer.send('ad:setCurrentTaskId', currentTaskId);
+
+  renderTaskSteps();
+
+  const adUrl = computeAdUrl();
+  document.getElementById('ad-url-label').textContent = adUrl;
+
+  const wv = ensureAdWebview();
+  if (forceReload || !wv.src) {
+    adWebviewDidFinishLoad = false;
+    wv.src = adUrl;
+    return;
+  }
+
+  // 不重载 H5 内容：通知页面刷新任务/广告列表
+  try {
+    const now = Date.now();
+    const taskIdStr = String(currentTaskId ?? '');
+    const isSameTask = taskIdStr && taskIdStr === String(lastRefreshAdListTaskId ?? '');
+    const tooSoon = now - lastRefreshAdListAt < 1200;
+
+    // 降低宿主侧“放大”概率：未握手/未完成首屏加载时不触发 H5 刷新函数。
+    if (!adHandshakeAcked || !adWebviewDidFinishLoad) return;
+    if (isSameTask && tooSoon) return;
+
+    wv.send('CallJSFunction', 'refreshAdList', currentTaskId);
+    lastRefreshAdListAt = now;
+    lastRefreshAdListTaskId = currentTaskId;
+  } catch {}
+}
+
+function maybeAutoAdvanceToNextTask() {
+  if (!tasks.length) return;
+  if (currentTaskIndex < 0 || currentTaskIndex >= tasks.length) return;
+  const cur = tasks[currentTaskIndex];
+  if (!cur || cur.complete_status !== 2) return;
+
+  const nextIdx = tasks.findIndex((t, i) => i > currentTaskIndex && t.complete_status !== 2);
+  if (nextIdx >= 0) {
+    selectTask(nextIdx, { forceReload: false });
+  }
+}
+
+// ─── 自动看广告功能 (纯模拟人手行为) ────────────────────────────────────────────────
+let _autoAdRunning = false;
+let _autoAdTimer = null;
+
+// 全局连续鼠标位置记录，避免突变跳转
+let _vMouseX = 400; 
+let _vMouseY = 500;
+let _lastAdClickTime = 0;
+
+async function findAdClickTargetCoords(wv) {
+  if (!wv) return null;
+
+  // 在目标容器矩形范围内随机选点，但从边界向内收缩 10%，避免点到边框/遮罩导致点击无效。
+  const SHRINK = 0.10;
+  return wv.executeJavaScript(`
+    (() => {
+      try {
+        const divs = document.querySelectorAll('div');
+        for (const div of divs) {
+          if (div.className && /index-module__clickTimerWrapper__\\w{5}/.test(div.className) && div.children && div.children.length > 0) {
+            const parent = div.parentElement;
+            const rect = parent ? parent.getBoundingClientRect() : div.getBoundingClientRect();
+            if (rect.width > 2 && rect.height > 2) {
+              const padX = rect.width * ${SHRINK};
+              const padY = rect.height * ${SHRINK};
+              const left = rect.left + padX;
+              const top = rect.top + padY;
+              const right = rect.right - padX;
+              const bottom = rect.bottom - padY;
+
+              const w = right - left;
+              const h = bottom - top;
+              if (w <= 1 || h <= 1) continue;
+
+              const rx = left + Math.random() * w;
+              const ry = top + Math.random() * h;
+              return { x: rx, y: ry };
+            }
+          }
+        }
+      } catch {}
+      return null;
+    })();
+  `);
+}
+
+function toggleAutoAd() {
+  if (document.getElementById('auto-ad-checkbox').checked) {
+    scheduleAutoAdLoop();
+  } else {
+    clearTimeout(_autoAdTimer);
+  }
+}
+
+function scheduleAutoAdLoop(delay = 3000) {
+  clearTimeout(_autoAdTimer);
+  if (!document.getElementById('auto-ad-checkbox').checked) return;
+  _autoAdTimer = setTimeout(runAutoAdLoop, delay);
+}
+
+// 模拟带有随机性的睡眠
+const randomSleep = (min, max) => new Promise(r => setTimeout(r, min + Math.random() * (max - min)));
+
+// 生成平滑且带有随机抖动的人类鼠标轨迹 (三阶贝塞尔 + 缓动 + 抖动)
+function generateHumanCurve(startX, startY, endX, endY, steps) {
+  const points = [];
+  const dist = Math.hypot(endX - startX, endY - startY);
+  const maxOffset = Math.min(dist * 0.5, 200); 
+  const cp1X = startX + (endX - startX) * 0.3 + (Math.random() - 0.5) * maxOffset;
+  const cp1Y = startY + (endY - startY) * 0.3 + (Math.random() - 0.5) * maxOffset;
+  const cp2X = startX + (endX - startX) * 0.7 + (Math.random() - 0.5) * maxOffset;
+  const cp2Y = startY + (endY - startY) * 0.7 + (Math.random() - 0.5) * maxOffset;
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    // 时间缓动: easeOutCubic (先快后慢，符合人手停靠目标的习惯)
+    const easeT = 1 - Math.pow(1 - t, 3); 
+
+    const x = Math.pow(1 - easeT, 3) * startX
+            + 3 * Math.pow(1 - easeT, 2) * easeT * cp1X
+            + 3 * (1 - easeT) * Math.pow(easeT, 2) * cp2X
+            + Math.pow(easeT, 3) * endX;
+    const y = Math.pow(1 - easeT, 3) * startY
+            + 3 * Math.pow(1 - easeT, 2) * easeT * cp1Y
+            + 3 * (1 - easeT) * Math.pow(easeT, 2) * cp2Y
+            + Math.pow(easeT, 3) * endY;
+
+    // 高频随机抖动 (越接近目标抖动越小)
+    const jitter = (1 - easeT) * 5; 
+    const jx = x + (Math.random() - 0.5) * jitter;
+    const jy = y + (Math.random() - 0.5) * jitter;
+
+    points.push({ x: Math.round(jx), y: Math.round(jy) });
+  }
+  return points;
+}
+
+function sendMouseInput(wv, event) {
+  if (!wv || !wv.sendInputEvent) return;
+
+  // 将系统事件发送到 webview 内核 
+  wv.sendInputEvent(event);
+  // 我们已经在 webview-preload.js 内部挂载了全局鼠标事件监听器
+  // 它会自动响应物理鼠标操作以及这里的 sendInputEvent，实现了红灯的完美追踪。
+}
+
+async function moveMouseTo(wv, targetX, targetY) {
+  const steps = 30 + Math.floor(Math.random() * 20);
+  const curve = generateHumanCurve(_vMouseX, _vMouseY, targetX, targetY, steps);
+  for (const pt of curve) {
+    sendMouseInput(wv, { type: 'mouseMove', x: pt.x, y: pt.y });
+    _vMouseX = pt.x;
+    _vMouseY = pt.y;
+    await randomSleep(8, 25);
+  }
+}
+
+async function wanderMouse(wv) {
+  // 在当前位置附近随机游走，模仿阅读/发呆移动
+  const targetX = Math.max(20, Math.min(800, _vMouseX + (Math.random() - 0.5) * 300));
+  const targetY = Math.max(20, Math.min(1000, _vMouseY + (Math.random() - 0.5) * 400));
+  await moveMouseTo(wv, targetX, targetY);
+  
+  // 偶尔可能拨动滚轮发呆
+  if (Math.random() < 0.2) {
+    sendMouseInput(wv, { type: 'mouseWheel', x: _vMouseX, y: _vMouseY, deltaX: 0, deltaY: (Math.random() - 0.5) * 60 });
+    await randomSleep(100, 300);
+  }
+}
+
+async function runAutoAdLoop() {
+  if (_autoAdRunning) return;
+  _autoAdRunning = true;
+  try {
+    const wv = ensureAdWebview();
+    if (wv && !wv.isDestroyed?.() && adWebviewDidFinishLoad) {
+      if (!wv.sendInputEvent) {
+        console.warn('[AutoAd] 此版本不支持 sendInputEvent，无法模拟跨进程鼠标');
+        return;
+      }
+
+      // 不再模拟向下滚动了，因为webview已经完全撑满高度
+      // 如果是一开始进入，让鼠标随机动一动唤醒视图
+      if (Math.random() < 0.3) {
+        await moveMouseTo(wv, _vMouseX + (Math.random() - 0.5) * 50, _vMouseY + (Math.random() - 0.5) * 50);
+      }
+
+      // 每隔 20 秒允许尝试寻找并点击一次目标
+      if (Date.now() - _lastAdClickTime > 20000) {
+        const elementCoords = await findAdClickTargetCoords(wv);
+
+        if (elementCoords && elementCoords.x > 0 && elementCoords.y > 0) {
+          console.log('[AutoAd] 找到目标区域位置并随机选点:', elementCoords);
+
+          // 有些情况下 DOM 已出现但广告仍在加载：命中目标后等待 3 秒再点，避免过早点击导致额外等待。
+          await randomSleep(3000, 3000);
+
+          // 等待后重新取一次坐标，避免布局变化/目标消失时点偏。
+          const rechecked = await findAdClickTargetCoords(wv);
+          if (!rechecked || !(rechecked.x > 0 && rechecked.y > 0)) {
+            console.log('[AutoAd] 目标在等待后消失/不可用，跳过本次点击');
+            await wanderMouse(wv);
+            _lastAdClickTime = Date.now();
+            console.log('[AutoAd] 本轮已处理，20秒后再尝试点击');
+          } else {
+            const targetX = rechecked.x;
+            const targetY = rechecked.y;
+            
+            // 平滑移动到目标
+            await moveMouseTo(wv, targetX, targetY);
+            await randomSleep(50, 200);
+
+            // 4. 发出点击事件
+            sendMouseInput(wv, { type: 'mouseDown', x: Math.round(_vMouseX), y: Math.round(_vMouseY), button: 'left', clickCount: 1 });
+            await randomSleep(40, 100); // 长按或短按
+            sendMouseInput(wv, { type: 'mouseUp', x: Math.round(_vMouseX), y: Math.round(_vMouseY), button: 'left', clickCount: 1 });
+            
+            _lastAdClickTime = Date.now();
+            console.log('[AutoAd] 点击完成，7秒内不再重复点击');
+          }
+        } else {
+          console.log('[AutoAd] 未找到目标计时控件，可能还在加载或已隐藏');
+          await wanderMouse(wv);
+        }
+      } else {
+        // 还没到20秒，只进行随机游走闲置摸鱼操作
+        await wanderMouse(wv);
+      }
+    }
+  } catch (err) {
+    console.error('[AutoAd] loop error:', err);
+  } finally {
+    _autoAdRunning = false;
+  }
+  
+  scheduleAutoAdLoop();
+}
+
+// 只有传入 --auto 时才默认启用并自动启动；手动模式下不自动开启。
+init()
+  .finally(() => {
+    const cb = document.getElementById('auto-ad-checkbox');
+    if (cb) cb.checked = !!autoModeInfo;
+    if (autoModeInfo) toggleAutoAd();
+  });
+</script>
+</body>
+</html>

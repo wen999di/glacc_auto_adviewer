@@ -1,0 +1,16 @@
+{
+  "name": "glacc-ad-viewer",
+  "version": "1.0.0",
+  "description": "给梨加速器独立广告 WebView 查看器（仅需 access_token）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^28.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "MIT"
+}
