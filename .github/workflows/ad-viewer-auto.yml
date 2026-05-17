@@ -1,0 +1,108 @@
+name: Ad Viewer Daily Automation
+
+on:
+  schedule:
+    - cron: '0 17 * * *'
+  workflow_dispatch: 
+
+jobs:
+  run-automation:
+    runs-on: windows-latest
+    steps:
+      # 1. 拉取当前代码仓库
+      - name: Checkout Main Code
+        uses: actions/checkout@v4
+
+      # 2. 拉取存放加密凭证的公开仓库
+      - name: Checkout Accounts Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/glacc_accounts
+          path: accounts-repo
+          token: ${{ secrets.GH_PAT }}
+          ref: ${{ github.ref_name == 'dev' && 'dev' || 'main' }}
+
+      # 3. 安装 Node 环境
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 4. 采用 yarn 安装 ad-viewer 依赖
+      - name: Install Dependencies
+        run: yarn install
+
+      # 5. 遍历解密账号凭证
+      - name: Decrypt Accounts
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: |
+          echo "$PRIVATE_KEY" > "$RUNNER_TEMP/private.pem"
+          mkdir -p decrypted_accounts
+          
+          echo "==== 开始解密 accounts 目录 ===="
+          for enc_file in accounts-repo/accounts/*.dat.enc; do
+            [ -e "$enc_file" ] || continue
+            base_name=$(basename "$enc_file" .enc)
+            
+            echo "🚀 正在解密: $base_name"
+            decrypted_path="decrypted_accounts/$base_name"
+            openssl smime -decrypt -binary -in "$enc_file" -inform DER -inkey "$RUNNER_TEMP/private.pem" -out "$decrypted_path"
+          done
+
+      # 6. 遍历使用 yarn 执行自动化操作
+      - name: Execute Automation
+        shell: bash
+        run: |
+          echo "==== 开始执行自动化操作 ===="
+          any_refreshed=0
+          
+          for decrypted_file in decrypted_accounts/*.dat; do
+            [ -e "$decrypted_file" ] || continue
+            base_name=$(basename "$decrypted_file")
+            
+            echo "---------------------------------------------------"
+            echo "▶️ 正在处理: $base_name"
+            
+            # 记录运行前文件哈希，用于判断 token 是否被刷新
+            hash_before=$(md5sum "$decrypted_file" | cut -d' ' -f1)
+            
+            # 执行 yarn start 命令，使用 tee 实时输出并存入日志文件
+            yarn start --accountfile "$decrypted_file" --timeout 15m --auto --autorefreshtoken 2>&1 | tee current_execution.log
+            
+            # 从日志文件中提取倒数第二行输出内容
+            second_to_last_line=$(tail -n 2 current_execution.log | head -n 1)
+            
+            # 根据倒数第二行输出判断结果
+            if echo "$second_to_last_line" | grep -qi "success"; then
+              echo "✅ [SUCCESS] $base_name 执行成功"
+            elif echo "$second_to_last_line" | grep -qi "error"; then
+              echo "❌ [ERROR] $base_name 执行失败。倒数第二行内容: $second_to_last_line"
+            else
+              echo "⚠️ [UNKNOWN] $base_name 状态未知。倒数第二行内容: $second_to_last_line"
+            fi
+            
+            # 检查文件是否被修改（token 刷新写回）
+            hash_after=$(md5sum "$decrypted_file" | cut -d' ' -f1)
+            if [ "$hash_before" != "$hash_after" ]; then
+              echo "🔄 Token refreshed for $base_name, re-encrypting..."
+              enc_out="accounts-repo/accounts/${base_name}.enc"
+              openssl smime -encrypt -binary -aes-256-cbc -in "$decrypted_file" -out "$enc_out" -outform DER accounts/public.pem
+              any_refreshed=1
+            fi
+          done
+          
+          echo "any_refreshed=$any_refreshed" >> "$GITHUB_ENV"
+
+      # 7. 若有 token 刷新，将更新后的加密账号文件推送回仓库
+      - name: Push Refreshed Account Files
+        if: env.any_refreshed == '1'
+        shell: bash
+        run: |
+          cd accounts-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add accounts/*.enc
+          git diff --cached --quiet || git commit -m "chore: refresh access tokens [skip ci]"
+          git push
